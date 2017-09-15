@@ -5,7 +5,7 @@ import (
   "log"
   "net/http"
   "io/ioutil"
-  emulator "./GoBoyAdvance/Emulator"
+  emulator "https://github.com/dgibb/moes-gba/tree/master/Emulator"
   "encoding/json"
   "os"
 )
