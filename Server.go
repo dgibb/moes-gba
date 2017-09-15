@@ -5,7 +5,6 @@ import (
   "log"
   "net/http"
   "io/ioutil"
-  emulator "https://github.com/dgibb/moes-gba/tree/master/Emulator"
   "encoding/json"
   "os"
 )
@@ -26,17 +25,17 @@ func handler(w http.ResponseWriter, r *http.Request) {
   fmt.Printf("the send rom handler was triggered! \n");
   buf, err := ioutil.ReadAll(r.Body)
   if err!=nil {log.Fatal("request",err)}
-  emulator.ROM = buf
+  ROM = buf
 }
 
 func cpuStateHandler(w http.ResponseWriter, r *http.Request) {
 
-  emulator.Clock_Tick()
+  Clock_Tick()
 
-  modeString := modes[(emulator.Cpu.CPSR&0x0000000F)]
+  modeString := modes[(Cpu.CPSR&0x0000000F)]
 
   var thumbString string
-  if((emulator.Cpu.CPSR&0x00000020)!=0){
+  if((Cpu.CPSR&0x00000020)!=0){
     thumbString = "Thumb"
   } else {
     thumbString = "ARM"
@@ -46,11 +45,11 @@ func cpuStateHandler(w http.ResponseWriter, r *http.Request) {
   var CpuState cpuState
   regs := make([]uint32, 19, 19)
   for i := 0; i < 16; i++ {
-		regs[i] = *(emulator.Cpu.R[i])
+		regs[i] = *(Cpu.R[i])
 	}
-  regs[16]=emulator.Cpu.CPSR
-  regs[17]=*(emulator.Cpu.SPSR)
-  regs[18]=emulator.Cpu.Fetch_reg
+  regs[16]=Cpu.CPSR
+  regs[17]=*(Cpu.SPSR)
+  regs[18]=Cpu.Fetch_reg
   CpuState.Mode = modeString
   CpuState.Thumb = thumbString
   CpuState.R = regs
@@ -61,12 +60,12 @@ func cpuStateHandler(w http.ResponseWriter, r *http.Request) {
 
 func regIncreaseHandler(w http.ResponseWriter, r *http.Request) {
   fmt.Printf("the cpu RegIncrease handler was triggered! \n")
-  emulator.Reset()
+  Reset()
 
-  modeString := modes[(emulator.Cpu.CPSR&0x0000000F)]
+  modeString := modes[(Cpu.CPSR&0x0000000F)]
 
   var thumbString string
-  if((emulator.Cpu.CPSR&0x00000020)!=0){
+  if((Cpu.CPSR&0x00000020)!=0){
     thumbString = "Thumb"
   } else {
     thumbString = "ARM"
@@ -75,11 +74,11 @@ func regIncreaseHandler(w http.ResponseWriter, r *http.Request) {
   var CpuState cpuState
   regs := make([]uint32, 19, 19)
   for i := 0; i < 16; i++ {
-		regs[i] = *(emulator.Cpu.R[i])
+		regs[i] = *(Cpu.R[i])
 	}
-  regs[16]=emulator.Cpu.CPSR
-  regs[17]=*(emulator.Cpu.SPSR)
-  regs[18]=emulator.Cpu.Fetch_reg
+  regs[16]=Cpu.CPSR
+  regs[17]=*(Cpu.SPSR)
+  regs[18]=Cpu.Fetch_reg
   CpuState.Mode = modeString
   CpuState.Thumb = thumbString
   CpuState.R = regs
