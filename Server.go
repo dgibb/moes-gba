@@ -5,7 +5,7 @@ import (
   "log"
   "net/http"
   "io/ioutil"
-  emulator "./Emulator"
+  emulator "./GoBoyAdvance/Emulator"
   "encoding/json"
   "os"
 )
