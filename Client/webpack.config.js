@@ -2,8 +2,8 @@ const path = require('path');
 const webpack = require('webpack');
 
 module.exports = {
-  entry: './Client/GBA.js',
-  output: { path: __dirname + '/Client', filename: 'GBA.min.js' },
+  entry: '.GBA.js',
+  output: { path: __dirname, filename: 'GBA.min.js' },
   watch: true,
 
   module: {

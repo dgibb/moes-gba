@@ -7,6 +7,7 @@ import (
   "io/ioutil"
   emulator "./Emulator"
   "encoding/json"
+  "os"
 )
 
 type cpuState struct{
@@ -89,10 +90,13 @@ func regIncreaseHandler(w http.ResponseWriter, r *http.Request) {
 
 
 func main() {
-  fmt.Printf("the server is runing...\n");
+  port, exist := os.LookupEnv("PORT")
+	if !(exist) {
+		port = "8080"
+	}
   http.Handle("/", http.FileServer(http.Dir("./Client")))
   http.HandleFunc("/sendRom", handler)
   http.HandleFunc("/cpuState", cpuStateHandler)
   http.HandleFunc("/regIncrease", regIncreaseHandler)
-  log.Fatal(http.ListenAndServe(":8080", nil))
+  log.Fatal(http.ListenAndServe(":"+port, nil))
 }

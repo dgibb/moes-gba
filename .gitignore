@@ -1,2 +1,5 @@
-node_modules
-ROMs
+/ROMs
+/Client/node_modules
+/Client/GBA.min.js
+govendor
+Procfile
