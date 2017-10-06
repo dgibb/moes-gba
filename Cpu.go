@@ -11,15 +11,23 @@ import (
 var inst_length uint32
 
 type cpu struct {
-  R [16]*uint32
-  CPSR uint32
+  R [16]*uint32 //array of pointers to actual bankable registers
+  CPSR uint32 //contains operating mode, thumb/arm mode and flags
   SPSR *uint32
-  Pipeline *Pipeline
-  Fetch_reg uint32 // IF pipeline register, contains fetched, undecoded instruction
+
+	Pipeline *Pipeline
+	//holds current pipeline
+  //if thumb mode has the same datapath as ARM it may be possible to bank out
+	//Instruction_Decode instead of replacing entire pipeline
+
+	Fetch_reg uint32 // IF pipeline register, contains fetched, undecoded instruction
   Decode_reg instruction // ID pipeline register, contains decoded instruction
-  Branch_Flag bool
+  Branch_Flag bool //used for flushing pipeline on branch insrtuctions
+	//may not actually be needed anymore
 }
 
+//pointers to pipelining Functions
+//makes it possibe to switch between arm and thumb mode
 type Pipeline struct{
   Instruction_Fetch func()
   Instruction_Decode func()
@@ -40,9 +48,11 @@ type registers struct {
   r10 uint32
   r11 uint32
   r12 uint32
-  r13 uint32
-  r14 uint32
-  r15 uint32
+  r13 uint32 //stack pointer (SP)
+  r14 uint32 //Link regester (return adress for RET instructions)
+  r15 uint32 //Program Counter (PC)
+
+	//Banked registers, not accessible in user mode
   r8_fiq uint32
   r9_fiq uint32
   r10_fiq uint32
@@ -65,6 +75,7 @@ type registers struct {
   SPSR_und uint32
 }
 
+//Data structure used for Decode_reg
 type instruction struct {
   Condition uint8
   Function func()
@@ -82,6 +93,10 @@ type instruction struct {
 //----Cpu Pipeline Logic----//
 //--------------------------*/
 
+//runs 1 clock cycle
+//called when client clicks run instruction button
+//client sends get request to cpuState route
+//handler runs this function then sends back updated cpu state
 func Clock_Tick() {
   Cpu.Pipeline.Instruction_Execute()
   Cpu.Pipeline.Instruction_Decode()
@@ -93,13 +108,16 @@ func Clock_Tick() {
 //----Cpu ARM Logic----//
 //---------------------*/
 
+//called by Clock_Tick(), fetches next instruction from ROM
+//stores undecoded instruction as uint32 in Cpu.Fetch Reg
 func ARM_Instruction_Fetch() {
-
   Cpu.Fetch_reg = readWord(*(Cpu.R[15]))
   fmt.Printf("IF: fetched %X from %X\n", Cpu.Fetch_reg, *(Cpu.R[15]))
   *(Cpu.R[15]) += inst_length
 }
 
+//logical and arithmetic shifts and rotates
+//performed on operand 2 in some data processing type instructions (AND, OR, ADD etc.)
 func lli() bool {
   var val uint32 = *(Cpu.R[Cpu.Fetch_reg&0xF])
   var shift uint32 = (Cpu.Fetch_reg>>7)&0x1F
@@ -206,15 +224,24 @@ func rrr() bool {
   return carry
 }
 
+//Decodes Instruction currently stored in Cpu.Fetch_reg
+//stores result in Cpu.Decode_reg
 func ARM_Instruction_Decode() {
 
+    //get condition code, upper 4 bits of instruction
     Cpu.Decode_reg.Condition=uint8(Cpu.Fetch_reg>>28)
 
+    // Set all bits to 0 except 3 upper bits in lower nibble of upper byte (the 0x0E)
+    //switch these bits, finds all instructions in that range
+    //does not affect data in Cpu.Fetch_reg
     switch (Cpu.Fetch_reg&0x0E000000) {
 
+      //all numbers/instructions 0x0000:0000 - 0x01FF:FFFF match with this case
       case 0x00000000:
 
-        var inst uint32 = ((Cpu.Fetch_reg>>4)&0xF)|((Cpu.Fetch_reg>>16)&0x0FF0)
+        //create new variable by isolating bits 7-4 and 27-20
+        //use this to further decode instructions in this range
+        var inst uint32 = ((Cpu.Fetch_reg>>4)&0xF)|((Cpu.Fetch_reg>>16)&0x0FF0) //may actualy need to shift 20 in second half
 
         switch(inst){
 
@@ -312,6 +339,7 @@ func ARM_Instruction_Decode() {
 
         }
 
+      //all numbers/instructions 0x0200:0000 - 0x05FF:FFFF match with this case
       case 0x02000000, 0x04000000:
 
         fmt.Println("ID: reached 0x02 + 0x04 block")
@@ -592,6 +620,7 @@ func ARM_Instruction_Decode() {
             Cpu.Decode_reg.Function=NOP
         }
 
+      //all numbers/instructions 0x0600:0000 - 0x07FF:FFFF match with this case
       case 0x06000000:
         if((Cpu.Fetch_reg&0x00000010)!=0){
           fmt.Printf("ID: Invalid/undefined instruction, inserting NOP\n")
@@ -599,11 +628,15 @@ func ARM_Instruction_Decode() {
           //LDR/STR Do This Later
         }
 
+      //all numbers/instructions 0x0800:0000 - 0x09FF:FFFF match with this case
       case 0x08000000:
 
+      //all numbers/instructions 0x0A00:0000 - 0x0BFF:FFFF match with this case
+      //all instructions that match this are Branch or Branch and Link
       case 0x0A000000:
         if((Cpu.Fetch_reg&0x01000000)!=0){
           Cpu.Decode_reg.Function=BL
+          //isolate immediate offset value, find signed jump distance
           Cpu.Decode_reg.Offset=(offsetCalc(Cpu.Fetch_reg & 0x00FFFFFF))
         }else{
           Cpu.Decode_reg.Function=B
@@ -611,6 +644,7 @@ func ARM_Instruction_Decode() {
           fmt.Printf("ID: Decoded Branch Correctly\n")
         }
 
+      //all numbers/instructions 0x0C00:0000 - 0x0DFF:FFFF match with this case
       case 0x0C000000:
         fmt.Printf("ID: coprocessor instruction, inserting NOP\n")
         Cpu.Decode_reg.Function=NOP
@@ -624,8 +658,9 @@ func ARM_Instruction_Decode() {
     }
 }
 
+//executes instruction, grabs data from decoded instruction in Cpu.Decode_reg
 func ARM_Instruction_Execute() {
-    if (eval_condition(Cpu.Decode_reg.Condition)){
+    if (eval_condition(Cpu.Decode_reg.Condition)){ //only run if condition passes
     fmt.Printf("EX: condition passed, Executing " )
     Cpu.Decode_reg.Function();
   } else {
@@ -633,6 +668,7 @@ func ARM_Instruction_Execute() {
   }
 }
 
+//evaluates condition code, determines whether instruction will be run or not
 func eval_condition(condition uint8) bool {
   switch (condition) {
 
@@ -683,8 +719,7 @@ func eval_condition(condition uint8) bool {
 
     default:
       fmt.Println("EX: illegal Condition code 0xF")
-      return false
-
+      return false //do not execute, probably not an instruction
   }
 }
 
@@ -692,12 +727,13 @@ func eval_condition(condition uint8) bool {
 //----Cpu Thumb Logic----//
 //-----------------------*/
 
+//fetch a thumb instruction from ROM
 func Thumb_Instruction_Fetch() {
     if (Cpu.Branch_Flag){
       Cpu.Fetch_reg=0xE3000000
       Cpu.Branch_Flag=false
     } else {
-      Cpu.Fetch_reg = readWord(*(Cpu.R[15]))
+      Cpu.Fetch_reg = readWord(*(Cpu.R[15])) //read Halfword, need to write function in memory.go
     }
     fmt.Printf("IF: fetched %X\n", Cpu.Fetch_reg )
 }
@@ -720,6 +756,9 @@ func Thumb_Instruction_Execute() {
 //---Cpu Helper Functions---//
 //--------------------------*/
 
+//calcuates offset for branch instructions
+//sign extends and takes 2s compliment if negative I think
+//shifts left 2
 func offsetCalc(offset uint32) uint32{
   if ((offset&0x00800000)!=0){
     offset = offset|0xFF000000
@@ -804,13 +843,14 @@ var STRB = func (){
   fmt.Println("Store Register Byte")
 }
 
-var MSRC = func(){
+var MSRC = func(){ //move word into CPSR mostly used to change operating mode
   fmt.Println("MSR CPSR")
   *Cpu.Decode_reg.Dest_reg = *(Cpu.Decode_reg.op1)
+	//may need to mask so flags and thumb bit remain unchanged
   switch (Cpu.CPSR&0x1F){
 
   case 0x10:
-    fmt.Println("entered User mode, This was probably not supposed to happen")
+    fmt.Println("entered User mode, This was probably not supposed to happen") //GBA doesnt use user mode
     Cpu.R[8]=&(Registers.r8)
     Cpu.R[9]=&(Registers.r9)
     Cpu.R[10]=&(Registers.r10)
@@ -818,7 +858,7 @@ var MSRC = func(){
     Cpu.R[12]=&(Registers.r12)
     Cpu.R[13]=&(Registers.r13)
     Cpu.R[14]=&(Registers.r14)
-    Cpu.SPSR=&(Registers.SPSR_und) //Should never be accessed, User and undefined mode should never be entered
+    Cpu.SPSR=&(Registers.SPSR_und) //Should never be accessed, user has no SPSR, set placeholder
 
   case 0x11:
     fmt.Println("entered FIQ mode")
@@ -854,7 +894,7 @@ var MSRC = func(){
     Cpu.SPSR=&(Registers.SPSR_svc)
 
   case 0x17:
-    fmt.Println("entered Abort mode, This was probably not supposed to happen")
+    fmt.Println("entered Abort mode, This was probably not supposed to happen") //GBA doesnt use abort mode
     Cpu.R[8]=&(Registers.r8)
     Cpu.R[9]=&(Registers.r9)
     Cpu.R[10]=&(Registers.r10)
@@ -865,7 +905,7 @@ var MSRC = func(){
     Cpu.SPSR=&(Registers.SPSR_abt)
 
   case 0x1B:
-    fmt.Println("entered Undefined mode, This was probably not supposed to happen")
+    fmt.Println("entered Undefined mode, This was probably not supposed to happen") //GBA doesnt use undefined mode
     Cpu.R[8]=&(Registers.r8)
     Cpu.R[9]=&(Registers.r9)
     Cpu.R[10]=&(Registers.r10)
@@ -884,8 +924,7 @@ var MSRC = func(){
     Cpu.R[12]=&(Registers.r12)
     Cpu.R[13]=&(Registers.r13)
     Cpu.R[14]=&(Registers.r14)
-    Cpu.SPSR=&(Registers.SPSR_und) //Should never be accessed, undefined mode should never be entered
-  }
+    Cpu.SPSR=&(Registers.SPSR_und) //Should never be accessed, system mode has no SPSR, use undefined as placehoder
 }
 
 var MUL = func(){
