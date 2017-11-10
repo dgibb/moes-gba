@@ -102,6 +102,7 @@ func Clock_Tick() {
   Cpu.Pipeline.Instruction_Decode()
   Cpu.Pipeline.Instruction_Fetch()
   fmt.Println("---------------------------------------------")
+  //
 }
 
 /*---------------------//
@@ -925,6 +926,7 @@ var MSRC = func(){ //move word into CPSR mostly used to change operating mode
     Cpu.R[13]=&(Registers.r13)
     Cpu.R[14]=&(Registers.r14)
     Cpu.SPSR=&(Registers.SPSR_und) //Should never be accessed, system mode has no SPSR, use undefined as placehoder
+  }
 }
 
 var MUL = func(){

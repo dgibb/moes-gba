@@ -1,13 +1,7 @@
 import React from 'react';
 import jquery from 'jquery';
-import { Link } from 'react-router-dom';
 
 export class Header extends React.Component {
-
-sendResetRequest(){
-  console.log('sending reset request');
-  jquery.post('/reset');
-}
 
   render() {
     return (

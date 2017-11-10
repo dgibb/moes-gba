@@ -2,7 +2,7 @@ const path = require('path');
 const webpack = require('webpack');
 
 module.exports = {
-  entry: '.GBA.js',
+  entry: './GBA.js',
   output: { path: __dirname, filename: 'GBA.min.js' },
   watch: true,
 

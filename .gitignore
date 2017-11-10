@@ -1,5 +1,6 @@
 /ROMs
 /Client/node_modules
-/Client/GBA.min.js
+Client/GBA.min.js
+GoBoyAdvance
 govendor
 Procfile
